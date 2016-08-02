@@ -168,7 +168,7 @@ class ShardCommitCoordinator {
             } else {
                 // The caller does not want immediate commit - the 3-phase commit will be coordinated by the
                 // front-end so send back a ReadyTransactionReply with our actor path.
-            	log.info("TellReady {} {}",ready.getTransactionID(), System.nanoTime());
+                log.info("TellReady {} {}",ready.getTransactionID(), System.nanoTime());
                 sender.tell(readyTransactionReply(shard), shard.self());
             }
         }
