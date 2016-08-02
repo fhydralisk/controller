@@ -327,21 +327,21 @@ class ShardCommitCoordinator {
     private void doCanCommit(final CohortEntry cohortEntry) {
         boolean canCommit = false;
         try {
-            log.info("canCommiting {} {}",cohortEntry.getTransactionID(), System.nanoTime());
+            log.info("canCommiting {} {} {}", cohortEntry.getTransactionID(), cohortEntry.getShard().toString(),System.nanoTime());
             canCommit = cohortEntry.canCommit();
 
             log.debug("{}: canCommit for {}: {}", name, cohortEntry.getTransactionID(), canCommit);
 
             if(cohortEntry.isDoImmediateCommit()) {
                 if(canCommit) {
-                    log.info("immediateCommit {} {}",cohortEntry.getTransactionID(), System.nanoTime());
+                    log.info("immediateCommit {} {} {}",cohortEntry.getTransactionID(), cohortEntry.getShard().toString(), System.nanoTime());
                     doCommit(cohortEntry);
                 } else {
                     cohortEntry.getReplySender().tell(new Status.Failure(new TransactionCommitFailedException(
                                 "Can Commit failed, no detailed cause available.")), cohortEntry.getShard().self());
                 }
             } else {
-                log.info("tellCanCommit {} {}",cohortEntry.getTransactionID(), System.nanoTime());
+                log.info("tellCanCommit {} {} {}",cohortEntry.getTransactionID(), cohortEntry.getShard().toString(), System.nanoTime());
                 cohortEntry.getReplySender().tell(
                         canCommit ? CanCommitTransactionReply.YES.toSerializable() :
                             CanCommitTransactionReply.NO.toSerializable(), cohortEntry.getShard().self());
@@ -374,13 +374,13 @@ class ShardCommitCoordinator {
         // normally fail since we ensure only one concurrent 3-phase commit.
 
         try {
-            log.info("preCommit {} {}",cohortEntry.getTransactionID(), System.nanoTime());
+            log.info("preCommit {} {} {}",cohortEntry.getTransactionID(), cohortEntry.getShard().toString(), System.nanoTime());
             cohortEntry.preCommit();
 
-            log.info("continueCommit {} {}",cohortEntry.getTransactionID(), System.nanoTime());
+            log.info("continueCommit {} {} {}",cohortEntry.getTransactionID(), cohortEntry.getShard().toString(), System.nanoTime());
             cohortEntry.getShard().continueCommit(cohortEntry);
 
-            log.info("commited {} {}",cohortEntry.getTransactionID(), System.nanoTime());
+            log.info("commited {} {} {}",cohortEntry.getTransactionID(), cohortEntry.getShard().toString(), System.nanoTime());
             cohortEntry.updateLastAccessTime();
 
             success = true;
