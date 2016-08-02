@@ -201,6 +201,12 @@
                 description
                     "time for testing";
             }
+            
+            leaf commits {
+                type uint32;
+                description
+                     "times of commits";
+            }
         }
     }
 

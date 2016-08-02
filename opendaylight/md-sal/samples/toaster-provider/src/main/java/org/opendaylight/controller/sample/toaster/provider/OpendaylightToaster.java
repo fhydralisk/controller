@@ -193,7 +193,7 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
      */
     @Override
     public Future<RpcResult<Void>> testDs(final TestDsInput input) {
-        final long startTime = System.nanoTime();
+        // final long startTime = System.nanoTime();
         long trans = 0;
 
         if (input.getMethod() == 3) {
@@ -208,14 +208,15 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
             return Futures.immediateFuture(RpcResultBuilder.<Void> success().build() );
         }
 
-        while (System.nanoTime() - startTime < input.getTestTime() * 1000000000) {
-            trans++;
+        final long timesOfCommits = input.getCommits();
+        for (trans=0; trans<timesOfCommits; trans++) {
+            final long transf = trans;
             final ReadWriteTransaction tx = dataProvider.newReadWriteTransaction();
-            LOG.info("Transaction starts - {} - {}", tx.toString(), System.nanoTime() );
+            //LOG.info("Transaction starts - {} - {}", tx.toString(), System.nanoTime() );
 
             final InstanceIdentifier<DsTestSpace> idspace = TOASTER_IID.builder()
-                         .child(DsTestSpace.class, new DsTestSpaceKey(trans)).build();
-            final DsTestSpace testSpace = new DsTestSpaceBuilder().setStoreData(trans).build();
+                         .child(DsTestSpace.class, new DsTestSpaceKey(transf)).build();
+            final DsTestSpace testSpace = new DsTestSpaceBuilder().setStoreData(transf).build();
 
             tx.put( LogicalDatastoreType.OPERATIONAL, idspace, testSpace, true );
             /*tx.put( LogicalDatastoreType.OPERATIONAL, TOASTER2_IID,
@@ -225,12 +226,7 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
 
                 @Override
                 public void onSuccess(Void result) {
-                    // TODO Auto-generated method stub
-                    if (System.nanoTime() - startTime > input.getTestTime() * 1000000000) {
-                        LOG.info("Transaction submit timeout - {} - {}", tx.toString(), System.nanoTime() );
-                    } else {
-                        LOG.info("Transaction submit succeed - {} - {}", tx.toString(), System.nanoTime() );
-                    }
+                    LOG.info("Transaction submit succeed - {} - {}", tx.toString(), System.nanoTime() );
                 }
 
                 @Override
@@ -246,8 +242,8 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
                 LOG.info("Transaction2 starts - {} - {}", tx2.toString(), System.nanoTime() );
 
                 final InstanceIdentifier<DsTestSpace2> idspace2 = TOASTER2_IID.builder()
-                             .child(DsTestSpace2.class, new DsTestSpace2Key(trans)).build();
-                final DsTestSpace2 testSpace2 = new DsTestSpace2Builder().setStoreData2(trans).build();
+                             .child(DsTestSpace2.class, new DsTestSpace2Key(transf)).build();
+                final DsTestSpace2 testSpace2 = new DsTestSpace2Builder().setStoreData2(transf).build();
 
                 tx2.put( LogicalDatastoreType.OPERATIONAL, idspace2, testSpace2, true );
                 /*tx.put( LogicalDatastoreType.OPERATIONAL, TOASTER2_IID,
@@ -258,11 +254,7 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
                     @Override
                     public void onSuccess(Void result) {
                         // TODO Auto-generated method stub
-                        if (System.nanoTime() - startTime > input.getTestTime() * 1000000000) {
-                            LOG.info("Transaction2 submit timeout - {} - {}", tx.toString(), System.nanoTime() );
-                        } else {
-                            LOG.info("Transaction2 submit succeed - {} - {}", tx.toString(), System.nanoTime() );
-                        }
+                        LOG.info("Transaction2 submit succeed - {} - {}", tx.toString(), System.nanoTime() );
                     }
 
                     @Override
@@ -274,7 +266,7 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
                 });
 
             }
-        }
+    }
 
         return Futures.immediateFuture(RpcResultBuilder.<Void> success().build() );
     }
@@ -437,7 +429,7 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
 
     private void setToasterStatusUp( final Function<Boolean,Void> resultCallback ) {
 
-        LOG.info("FHY-3-TOASTER STARTED");
+        LOG.info("FHY-4-TOASTER STARTED");
         WriteTransaction tx = dataProvider.newWriteOnlyTransaction();
         tx.put( LogicalDatastoreType.OPERATIONAL,TOASTER_IID, buildToaster( ToasterStatus.Up ) );
         tx.put( LogicalDatastoreType.OPERATIONAL,TOASTER2_IID, buildToaster2( Toaster2.ToasterStatus.Up ) );
