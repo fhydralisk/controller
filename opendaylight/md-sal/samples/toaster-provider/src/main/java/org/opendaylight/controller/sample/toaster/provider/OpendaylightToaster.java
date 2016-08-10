@@ -36,12 +36,20 @@ import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster.rev091120
 import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster.rev091120.ToasterRestocked;
 import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster.rev091120.ToasterRestockedBuilder;
 import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster.rev091120.ToasterService;
+import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster.rev091120.toaster.DsTestSpace;
+import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster.rev091120.toaster.DsTestSpaceBuilder;
+import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster.rev091120.toaster.DsTestSpaceKey;
+import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster2.rev091120.Toaster2;
+import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster2.rev091120.Toaster2Builder;
+import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster2.rev091120.toaster2.DsTestSpace2;
+import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster2.rev091120.toaster2.DsTestSpace2Builder;
+import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster2.rev091120.toaster2.DsTestSpace2Key;
 import org.opendaylight.yangtools.yang.binding.DataObject;
 import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
 import org.opendaylight.yangtools.yang.common.RpcError;
-import org.opendaylight.yangtools.yang.common.RpcResultBuilder;
 import org.opendaylight.yangtools.yang.common.RpcError.ErrorType;
 import org.opendaylight.yangtools.yang.common.RpcResult;
+import org.opendaylight.yangtools.yang.common.RpcResultBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,16 +60,6 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
-
-
-import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster2.rev091120.Toaster2;
-import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster2.rev091120.Toaster2Builder;
-import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster2.rev091120.toaster2.DsTestSpace2;
-import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster2.rev091120.toaster2.DsTestSpace2Builder;
-import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster2.rev091120.toaster2.DsTestSpace2Key;
-import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster.rev091120.toaster.DsTestSpace;
-import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster.rev091120.toaster.DsTestSpaceBuilder;
-import org.opendaylight.yang.gen.v1.http.netconfcentral.org.ns.toaster.rev091120.toaster.DsTestSpaceKey;
 
 public class OpendaylightToaster implements ToasterService, ToasterProviderRuntimeMXBean,
                                             DataChangeListener, AutoCloseable {
@@ -196,7 +194,7 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
         // final long startTime = System.nanoTime();
         long trans = 0;
 
-        if (input.getMethod() == 3) {
+        /* if (input.getMethod() == 3) {
             final ReadWriteTransaction tx = dataProvider.newReadWriteTransaction();
             final InstanceIdentifier<DsTestSpace> idspace = TOASTER_IID.builder()
                     .child(DsTestSpace.class).build();
@@ -206,7 +204,7 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
             tx.delete(LogicalDatastoreType.OPERATIONAL, idspace2);
             tx.submit();
             return Futures.immediateFuture(RpcResultBuilder.<Void> success().build() );
-        }
+        } */
 
         final long timesOfCommits = input.getCommits();
         for (trans=0; trans<timesOfCommits; trans++) {
@@ -219,6 +217,14 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
             final DsTestSpace testSpace = new DsTestSpaceBuilder().setStoreData(transf).build();
 
             tx.put( LogicalDatastoreType.OPERATIONAL, idspace, testSpace, true );
+
+            if (input.getMethod() == 3) {
+                final InstanceIdentifier<DsTestSpace2> idspace2 = TOASTER2_IID.builder()
+                        .child(DsTestSpace2.class, new DsTestSpace2Key(transf)).build();
+                final DsTestSpace2 testSpace2 = new DsTestSpace2Builder().setStoreData2(transf).build();
+
+                tx.put( LogicalDatastoreType.OPERATIONAL, idspace2, testSpace2, true );
+            }
             /*tx.put( LogicalDatastoreType.OPERATIONAL, TOASTER2_IID,
                     buildToaster2( Toaster2.ToasterStatus.Down ) );*/
             final ListenableFuture<Void> submitFuture = tx.submit();
@@ -239,7 +245,7 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
 
             if (input.getMethod() == 2) {
                 final ReadWriteTransaction tx2 = dataProvider.newReadWriteTransaction();
-                LOG.info("Transaction2 starts - {} - {}", tx2.toString(), System.nanoTime() );
+                // LOG.info("Transaction2 starts - {} - {}", tx2.toString(), System.nanoTime() );
 
                 final InstanceIdentifier<DsTestSpace2> idspace2 = TOASTER2_IID.builder()
                              .child(DsTestSpace2.class, new DsTestSpace2Key(transf)).build();
