@@ -272,7 +272,13 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
                 });
 
             }
-    }
+            try {
+                Thread.sleep(input.getTestTime());
+            } catch (InterruptedException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
 
         return Futures.immediateFuture(RpcResultBuilder.<Void> success().build() );
     }

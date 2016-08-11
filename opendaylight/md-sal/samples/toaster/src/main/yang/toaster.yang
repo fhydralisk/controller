@@ -195,7 +195,7 @@
 
             leaf testTime {
                 type uint32 {
-                    range "1..20";
+                    range "0..2000";
                 }
                 default 1;
                 description
