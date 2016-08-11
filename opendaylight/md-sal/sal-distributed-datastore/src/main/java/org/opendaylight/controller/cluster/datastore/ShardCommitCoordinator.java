@@ -131,7 +131,7 @@ class ShardCommitCoordinator {
         log.debug("{}: Readying transaction {}, client version {}", name,
                 ready.getTransactionID(), ready.getTxnClientVersion());
 
-        log.info("Readying {} {}",ready.getTransactionID(), System.nanoTime());
+        log.info("Readying {} {} {}",ready.getTransactionID(), shard.toString(), System.nanoTime());
 
         CohortEntry cohortEntry = new CohortEntry(ready.getTransactionID(), ready.getCohort(),
                 (MutableCompositeModification) ready.getModification());
@@ -163,12 +163,12 @@ class ShardCommitCoordinator {
                 cohortEntry.setDoImmediateCommit(true);
                 cohortEntry.setReplySender(sender);
                 cohortEntry.setShard(shard);
-                log.info("immediateCommit {} {}",ready.getTransactionID(), System.nanoTime());
+                log.info("immediateCommit {} {} {}",ready.getTransactionID(), shard.toString(), System.nanoTime());
                 handleCanCommit(cohortEntry);
             } else {
                 // The caller does not want immediate commit - the 3-phase commit will be coordinated by the
                 // front-end so send back a ReadyTransactionReply with our actor path.
-                log.info("TellReady {} {}",ready.getTransactionID(), System.nanoTime());
+                log.info("TellReady {} {} {}",ready.getTransactionID(), shard.toString(), System.nanoTime());
                 sender.tell(readyTransactionReply(shard), shard.self());
             }
         }
