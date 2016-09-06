@@ -8,15 +8,10 @@
 
 package org.opendaylight.controller.cluster.datastore;
 
-import akka.actor.ActorSelection;
-import akka.dispatch.Futures;
-import akka.dispatch.OnComplete;
-import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+
 import org.opendaylight.controller.cluster.datastore.messages.AbortTransaction;
 import org.opendaylight.controller.cluster.datastore.messages.AbortTransactionReply;
 import org.opendaylight.controller.cluster.datastore.messages.CanCommitTransaction;
@@ -26,6 +21,14 @@ import org.opendaylight.controller.cluster.datastore.messages.CommitTransactionR
 import org.opendaylight.controller.cluster.datastore.utils.ActorContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
+
+import akka.actor.ActorSelection;
+import akka.dispatch.Futures;
+import akka.dispatch.OnComplete;
 import scala.concurrent.Future;
 import scala.runtime.AbstractFunction1;
 
@@ -151,8 +154,10 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
                 }
 
                 if(iterator.hasNext() && result){
-                    Future<Object> future = actorContext.executeOperationAsync(iterator.next(), message,
+                    ActorSelection cohort = iterator.next();
+                    Future<Object> future = actorContext.executeOperationAsync(cohort, message,
                             actorContext.getTransactionCommitOperationTimeout());
+                    LOG.info("[3PCCP]cancommit_message_sent_to_cohorts {} {}", cohort.anchorPath().toStringWithoutAddress(), System.nanoTime());
                     future.onComplete(this, actorContext.getClientDispatcher());
                 } else {
                     if(LOG.isDebugEnabled()) {
@@ -164,8 +169,10 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
             }
         };
 
-        Future<Object> future = actorContext.executeOperationAsync(iterator.next(), message,
+        ActorSelection cohort = iterator.next();
+        Future<Object> future = actorContext.executeOperationAsync(cohort, message,
                 actorContext.getTransactionCommitOperationTimeout());
+        LOG.info("[3PCCP]cancommit_message_sent_to_cohorts {} {}", cohort.anchorPath().toStringWithoutAddress(), System.nanoTime());
         future.onComplete(onComplete, actorContext.getClientDispatcher());
     }
 
@@ -246,6 +253,8 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
                     } else {
                         finishVoidOperation(operationName, message, expectedResponseClass,
                                 propagateException, returnFuture, callback);
+                        if (operationName.equals("commit"))
+                            LOG.info("[3PCCP]commit_message_sent_to cohorts {}", System.nanoTime());
                     }
                 }
             }, actorContext.getClientDispatcher());
