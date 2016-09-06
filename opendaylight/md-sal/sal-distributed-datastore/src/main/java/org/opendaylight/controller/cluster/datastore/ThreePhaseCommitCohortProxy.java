@@ -163,6 +163,8 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
                     if(LOG.isDebugEnabled()) {
                         LOG.debug("Tx {}: canCommit returning result: {}", transactionId, result);
                     }
+                    //FIXME: They do "canCommit" in sequence only for this?
+                    LOG.info("[3PCCP]cancommit_message returned {}", System.nanoTime());
                     returnFuture.set(Boolean.valueOf(result));
                 }
 
@@ -236,6 +238,8 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
         if(cohorts != null) {
             finishVoidOperation(operationName, message, expectedResponseClass, propagateException,
                     returnFuture, callback);
+            if (operationName.equals("commit"))
+                LOG.info("[3PCCP]commit_message_sent_to cohorts {}", System.nanoTime());
         } else {
             buildCohortList().onComplete(new OnComplete<Void>() {
                 @Override
@@ -253,8 +257,6 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
                     } else {
                         finishVoidOperation(operationName, message, expectedResponseClass,
                                 propagateException, returnFuture, callback);
-                        if (operationName.equals("commit"))
-                            LOG.info("[3PCCP]commit_message_sent_to cohorts {}", System.nanoTime());
                     }
                 }
             }, actorContext.getClientDispatcher());
