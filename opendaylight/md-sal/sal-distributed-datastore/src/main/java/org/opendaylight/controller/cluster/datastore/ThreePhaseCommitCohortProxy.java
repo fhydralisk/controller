@@ -178,6 +178,30 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
         future.onComplete(onComplete, actorContext.getClientDispatcher());
     }
 
+    private Future<Iterable<Object>> invokeCohorts(Object message, String operationName) {
+        List<Future<Object>> futureList = Lists.newArrayListWithCapacity(cohorts.size());
+        for(ActorSelection cohort : cohorts) {
+            Future<Object> future = actorContext.executeOperationAsync(cohort, message, actorContext.getTransactionCommitOperationTimeout());
+            if (operationName.equals("commit")) {
+                final ActorSelection cohortCur = cohort;
+                final OnComplete<Object> onComplete = new OnComplete<Object>() {
+
+                    @Override
+                    public void onComplete(Throwable failure, Object response) throws Throwable {
+                        // TODO Auto-generated method stub
+                        LOG.info("[3PCCP]commit_returned {} {}", cohortCur.pathString(), System.nanoTime());
+                    }
+
+                };
+                future.onComplete(onComplete, actorContext.getClientDispatcher());
+            }
+
+            futureList.add(future);
+        }
+
+        return Futures.sequence(futureList, actorContext.getClientDispatcher());
+    }
+
     private Future<Iterable<Object>> invokeCohorts(Object message) {
         List<Future<Object>> futureList = Lists.newArrayListWithCapacity(cohorts.size());
         for(ActorSelection cohort : cohorts) {
@@ -274,7 +298,7 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
 
         callback.resume();
 
-        Future<Iterable<Object>> combinedFuture = invokeCohorts(message);
+        Future<Iterable<Object>> combinedFuture = invokeCohorts(message, operationName);
 
         combinedFuture.onComplete(new OnComplete<Iterable<Object>>() {
             @Override
