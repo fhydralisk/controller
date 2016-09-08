@@ -9,7 +9,6 @@
 package org.opendaylight.controller.cluster.datastore;
 
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 
 import org.opendaylight.controller.cluster.datastore.messages.AbortTransaction;
@@ -121,6 +120,53 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
 
         final Object message = new CanCommitTransaction(transactionId).toSerializable();
 
+        Future <Iterable<Object>> combineFuture = invokeCohorts(message, "canCommit");
+
+
+
+        combineFuture.onComplete(new OnComplete<Iterable<Object>> () {
+
+            @Override
+            public void onComplete(Throwable failure, Iterable<Object> responses) throws Throwable {
+                if (failure != null) {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Tx {}: a canCommit cohort Future failed: {}", transactionId, failure);
+                    }
+                    returnFuture.setException(failure);
+                    commitOperationCallback.failure();
+                    return;
+                }
+
+                // Only the first call to pause takes effect - subsequent calls before resume are no-ops. So
+                // this means we'll only time the first transaction canCommit which should be fine.
+                commitOperationCallback.pause();
+
+                boolean result = true;
+                for (Object response: responses) {
+                    if (response.getClass().equals(CanCommitTransactionReply.SERIALIZABLE_CLASS)) {
+                        CanCommitTransactionReply reply =
+                                CanCommitTransactionReply.fromSerializable(response);
+                        if (!reply.getCanCommit()) {
+                            result = false;
+                        }
+                    } else {
+                        LOG.error("Unexpected response type {}", response.getClass());
+                        returnFuture.setException(new IllegalArgumentException(
+                                String.format("Unexpected response type %s", response.getClass())));
+                        return;
+                    }
+                }
+                if(LOG.isDebugEnabled()) {
+                    LOG.debug("Tx {}: canCommit returning result: {}", transactionId, result);
+                }
+                //FIXME: They do "canCommit" in sequence only for this?
+                LOG.info("[3PCCP]cancommit_message returned {}", System.nanoTime());
+                returnFuture.set(Boolean.valueOf(result));
+
+            }
+
+        }, actorContext.getClientDispatcher());
+        /*
         final Iterator<ActorSelection> iterator = cohorts.iterator();
 
         final OnComplete<Object> onComplete = new OnComplete<Object>() {
@@ -176,6 +222,7 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
                 actorContext.getTransactionCommitOperationTimeout());
         LOG.info("[3PCCP]cancommit_message_sent_to_cohorts {} {}", cohort.anchorPath().toStringWithoutAddress(), System.nanoTime());
         future.onComplete(onComplete, actorContext.getClientDispatcher());
+        */
     }
 
     private Future<Iterable<Object>> invokeCohorts(Object message, String operationName) {
