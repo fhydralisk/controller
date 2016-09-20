@@ -507,7 +507,7 @@ public class ActorContext {
      * Try to acquire a transaction creation permit. Will block if no permits are available.
      */
     public void acquireTxCreationPermit(){
-        txRateLimiter.acquire();
+        //txRateLimiter.acquire();
     }
 
     /**
