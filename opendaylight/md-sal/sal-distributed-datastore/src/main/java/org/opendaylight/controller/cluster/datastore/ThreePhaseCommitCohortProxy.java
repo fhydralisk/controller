@@ -8,15 +8,10 @@
 
 package org.opendaylight.controller.cluster.datastore;
 
-import akka.actor.ActorSelection;
-import akka.dispatch.Futures;
-import akka.dispatch.OnComplete;
-import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+
 import org.opendaylight.controller.cluster.datastore.messages.AbortTransaction;
 import org.opendaylight.controller.cluster.datastore.messages.AbortTransactionReply;
 import org.opendaylight.controller.cluster.datastore.messages.CanCommitTransaction;
@@ -26,6 +21,14 @@ import org.opendaylight.controller.cluster.datastore.messages.CommitTransactionR
 import org.opendaylight.controller.cluster.datastore.utils.ActorContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
+
+import akka.actor.ActorSelection;
+import akka.dispatch.Futures;
+import akka.dispatch.OnComplete;
 import scala.concurrent.Future;
 import scala.runtime.AbstractFunction1;
 
@@ -151,22 +154,52 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
                 }
 
                 if(iterator.hasNext() && result){
-                    Future<Object> future = actorContext.executeOperationAsync(iterator.next(), message,
+                    ActorSelection cohort = iterator.next();
+                    Future<Object> future = actorContext.executeOperationAsync(cohort, message,
                             actorContext.getTransactionCommitOperationTimeout());
+                    LOG.info("[3PCCP]cancommit_message_sent_to_cohorts {} {}", cohort.anchorPath().toStringWithoutAddress(), System.nanoTime());
                     future.onComplete(this, actorContext.getClientDispatcher());
                 } else {
                     if(LOG.isDebugEnabled()) {
                         LOG.debug("Tx {}: canCommit returning result: {}", transactionId, result);
                     }
+                    //FIXME: They do "canCommit" in sequence only for this?
+                    LOG.info("[3PCCP]cancommit_message returned {}", System.nanoTime());
                     returnFuture.set(Boolean.valueOf(result));
                 }
 
             }
         };
 
-        Future<Object> future = actorContext.executeOperationAsync(iterator.next(), message,
+        ActorSelection cohort = iterator.next();
+        Future<Object> future = actorContext.executeOperationAsync(cohort, message,
                 actorContext.getTransactionCommitOperationTimeout());
+        LOG.info("[3PCCP]cancommit_message_sent_to_cohorts {} {}", cohort.anchorPath().toStringWithoutAddress(), System.nanoTime());
         future.onComplete(onComplete, actorContext.getClientDispatcher());
+    }
+
+    private Future<Iterable<Object>> invokeCohorts(Object message, String operationName) {
+        List<Future<Object>> futureList = Lists.newArrayListWithCapacity(cohorts.size());
+        for(ActorSelection cohort : cohorts) {
+            Future<Object> future = actorContext.executeOperationAsync(cohort, message, actorContext.getTransactionCommitOperationTimeout());
+            if (operationName.equals("commit")) {
+                final ActorSelection cohortCur = cohort;
+                final OnComplete<Object> onComplete = new OnComplete<Object>() {
+
+                    @Override
+                    public void onComplete(Throwable failure, Object response) throws Throwable {
+                        // TODO Auto-generated method stub
+                        LOG.info("[3PCCP]commit_returned {} {}", cohortCur.pathString(), System.nanoTime());
+                    }
+
+                };
+                future.onComplete(onComplete, actorContext.getClientDispatcher());
+            }
+
+            futureList.add(future);
+        }
+
+        return Futures.sequence(futureList, actorContext.getClientDispatcher());
     }
 
     private Future<Iterable<Object>> invokeCohorts(Object message) {
@@ -229,6 +262,8 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
         if(cohorts != null) {
             finishVoidOperation(operationName, message, expectedResponseClass, propagateException,
                     returnFuture, callback);
+            if (operationName.equals("commit"))
+                LOG.info("[3PCCP]commit_message_sent_to cohorts {}", System.nanoTime());
         } else {
             buildCohortList().onComplete(new OnComplete<Void>() {
                 @Override
@@ -263,7 +298,7 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
 
         callback.resume();
 
-        Future<Iterable<Object>> combinedFuture = invokeCohorts(message);
+        Future<Iterable<Object>> combinedFuture = invokeCohorts(message, operationName);
 
         combinedFuture.onComplete(new OnComplete<Iterable<Object>>() {
             @Override

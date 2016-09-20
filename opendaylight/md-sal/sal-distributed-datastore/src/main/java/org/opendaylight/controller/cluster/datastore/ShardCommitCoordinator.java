@@ -7,12 +7,6 @@
  */
 package org.opendaylight.controller.cluster.datastore;
 
-import akka.actor.ActorRef;
-import akka.actor.Status;
-import akka.serialization.Serialization;
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Stopwatch;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -20,6 +14,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+
 import org.opendaylight.controller.cluster.datastore.compat.BackwardsCompatibleThreePhaseCommitCohort;
 import org.opendaylight.controller.cluster.datastore.messages.AbortTransactionReply;
 import org.opendaylight.controller.cluster.datastore.messages.BatchedModifications;
@@ -33,6 +28,14 @@ import org.opendaylight.controller.cluster.datastore.modification.MutableComposi
 import org.opendaylight.controller.md.sal.common.api.data.TransactionCommitFailedException;
 import org.opendaylight.yangtools.yang.data.api.schema.tree.DataTreeCandidate;
 import org.slf4j.Logger;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
+import com.google.common.base.Stopwatch;
+
+import akka.actor.ActorRef;
+import akka.actor.Status;
+import akka.serialization.Serialization;
 
 /**
  * Coordinates commits for a shard ensuring only one concurrent 3-phase commit.
@@ -128,6 +131,8 @@ class ShardCommitCoordinator {
         log.debug("{}: Readying transaction {}, client version {}", name,
                 ready.getTransactionID(), ready.getTxnClientVersion());
 
+        log.info("Readying {} {} {}",ready.getTransactionID(), shard.toString(), System.nanoTime());
+
         CohortEntry cohortEntry = new CohortEntry(ready.getTransactionID(), ready.getCohort(),
                 (MutableCompositeModification) ready.getModification());
         cohortCache.put(ready.getTransactionID(), cohortEntry);
@@ -158,10 +163,12 @@ class ShardCommitCoordinator {
                 cohortEntry.setDoImmediateCommit(true);
                 cohortEntry.setReplySender(sender);
                 cohortEntry.setShard(shard);
+                log.info("immediateCommit {} {} {}",ready.getTransactionID(), shard.toString(), System.nanoTime());
                 handleCanCommit(cohortEntry);
             } else {
                 // The caller does not want immediate commit - the 3-phase commit will be coordinated by the
                 // front-end so send back a ReadyTransactionReply with our actor path.
+                log.info("TellReady {} {} {}",ready.getTransactionID(), shard.toString(), System.nanoTime());
                 sender.tell(readyTransactionReply(shard), shard.self());
             }
         }
@@ -320,18 +327,21 @@ class ShardCommitCoordinator {
     private void doCanCommit(final CohortEntry cohortEntry) {
         boolean canCommit = false;
         try {
+            log.info("canCommiting {} {} {}", cohortEntry.getTransactionID(), cohortEntry.getShard().toString(),System.nanoTime());
             canCommit = cohortEntry.canCommit();
 
             log.debug("{}: canCommit for {}: {}", name, cohortEntry.getTransactionID(), canCommit);
 
             if(cohortEntry.isDoImmediateCommit()) {
                 if(canCommit) {
+                    log.info("immediateCommit {} {} {}",cohortEntry.getTransactionID(), cohortEntry.getShard().toString(), System.nanoTime());
                     doCommit(cohortEntry);
                 } else {
                     cohortEntry.getReplySender().tell(new Status.Failure(new TransactionCommitFailedException(
                                 "Can Commit failed, no detailed cause available.")), cohortEntry.getShard().self());
                 }
             } else {
+                log.info("tellCanCommit {} {} {}",cohortEntry.getTransactionID(), cohortEntry.getShard().toString(), System.nanoTime());
                 cohortEntry.getReplySender().tell(
                         canCommit ? CanCommitTransactionReply.YES.toSerializable() :
                             CanCommitTransactionReply.NO.toSerializable(), cohortEntry.getShard().self());
@@ -364,10 +374,13 @@ class ShardCommitCoordinator {
         // normally fail since we ensure only one concurrent 3-phase commit.
 
         try {
+            log.info("preCommit {} {} {}",cohortEntry.getTransactionID(), cohortEntry.getShard().toString(), System.nanoTime());
             cohortEntry.preCommit();
 
+            log.info("continueCommit {} {} {}",cohortEntry.getTransactionID(), cohortEntry.getShard().toString(), System.nanoTime());
             cohortEntry.getShard().continueCommit(cohortEntry);
 
+            log.info("commited {} {} {}",cohortEntry.getTransactionID(), cohortEntry.getShard().toString(), System.nanoTime());
             cohortEntry.updateLastAccessTime();
 
             success = true;
