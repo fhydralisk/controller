@@ -8,10 +8,15 @@
 
 package org.opendaylight.controller.cluster.datastore;
 
+import akka.actor.ActorSelection;
+import akka.dispatch.Futures;
+import akka.dispatch.OnComplete;
+import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-
 import org.opendaylight.controller.cluster.datastore.messages.AbortTransaction;
 import org.opendaylight.controller.cluster.datastore.messages.AbortTransactionReply;
 import org.opendaylight.controller.cluster.datastore.messages.CanCommitTransaction;
@@ -21,14 +26,6 @@ import org.opendaylight.controller.cluster.datastore.messages.CommitTransactionR
 import org.opendaylight.controller.cluster.datastore.utils.ActorContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
-
-import akka.actor.ActorSelection;
-import akka.dispatch.Futures;
-import akka.dispatch.OnComplete;
 import scala.concurrent.Future;
 import scala.runtime.AbstractFunction1;
 
@@ -43,7 +40,6 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
     private final List<Future<ActorSelection>> cohortFutures;
     private volatile List<ActorSelection> cohorts;
     private final String transactionId;
-    private volatile OperationCallback commitOperationCallback;
 
     public ThreePhaseCommitCohortProxy(ActorContext actorContext,
             List<Future<ActorSelection>> cohortFutures, String transactionId) {
@@ -114,11 +110,6 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
             return;
         }
 
-        commitOperationCallback = cohortFutures.isEmpty() ? OperationCallback.NO_OP_CALLBACK :
-            new TransactionRateLimitingCallback(actorContext);
-
-        commitOperationCallback.run();
-
         final Object message = new CanCommitTransaction(transactionId).toSerializable();
 
         final Iterator<ActorSelection> iterator = cohorts.iterator();
@@ -131,13 +122,8 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
                         LOG.debug("Tx {}: a canCommit cohort Future failed: {}", transactionId, failure);
                     }
                     returnFuture.setException(failure);
-                    commitOperationCallback.failure();
                     return;
                 }
-
-                // Only the first call to pause takes effect - subsequent calls before resume are no-ops. So
-                // this means we'll only time the first transaction canCommit which should be fine.
-                commitOperationCallback.pause();
 
                 boolean result = true;
                 if (response.getClass().equals(CanCommitTransactionReply.SERIALIZABLE_CLASS)) {
@@ -154,52 +140,22 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
                 }
 
                 if(iterator.hasNext() && result){
-                    ActorSelection cohort = iterator.next();
-                    Future<Object> future = actorContext.executeOperationAsync(cohort, message,
+                    Future<Object> future = actorContext.executeOperationAsync(iterator.next(), message,
                             actorContext.getTransactionCommitOperationTimeout());
-                    LOG.info("[3PCCP]cancommit_message_sent_to_cohorts {} {}", cohort.anchorPath().toStringWithoutAddress(), System.nanoTime());
                     future.onComplete(this, actorContext.getClientDispatcher());
                 } else {
                     if(LOG.isDebugEnabled()) {
                         LOG.debug("Tx {}: canCommit returning result: {}", transactionId, result);
                     }
-                    //FIXME: They do "canCommit" in sequence only for this?
-                    LOG.info("[3PCCP]cancommit_message returned {}", System.nanoTime());
                     returnFuture.set(Boolean.valueOf(result));
                 }
 
             }
         };
 
-        ActorSelection cohort = iterator.next();
-        Future<Object> future = actorContext.executeOperationAsync(cohort, message,
+        Future<Object> future = actorContext.executeOperationAsync(iterator.next(), message,
                 actorContext.getTransactionCommitOperationTimeout());
-        LOG.info("[3PCCP]cancommit_message_sent_to_cohorts {} {}", cohort.anchorPath().toStringWithoutAddress(), System.nanoTime());
         future.onComplete(onComplete, actorContext.getClientDispatcher());
-    }
-
-    private Future<Iterable<Object>> invokeCohorts(Object message, String operationName) {
-        List<Future<Object>> futureList = Lists.newArrayListWithCapacity(cohorts.size());
-        for(ActorSelection cohort : cohorts) {
-            Future<Object> future = actorContext.executeOperationAsync(cohort, message, actorContext.getTransactionCommitOperationTimeout());
-            if (operationName.equals("commit")) {
-                final ActorSelection cohortCur = cohort;
-                final OnComplete<Object> onComplete = new OnComplete<Object>() {
-
-                    @Override
-                    public void onComplete(Throwable failure, Object response) throws Throwable {
-                        // TODO Auto-generated method stub
-                        LOG.info("[3PCCP]commit_returned {} {}", cohortCur.pathString(), System.nanoTime());
-                    }
-
-                };
-                future.onComplete(onComplete, actorContext.getClientDispatcher());
-            }
-
-            futureList.add(future);
-        }
-
-        return Futures.sequence(futureList, actorContext.getClientDispatcher());
     }
 
     private Future<Iterable<Object>> invokeCohorts(Object message) {
@@ -235,8 +191,8 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
 
     @Override
     public ListenableFuture<Void> commit() {
-        OperationCallback operationCallback = commitOperationCallback != null ? commitOperationCallback :
-            OperationCallback.NO_OP_CALLBACK;
+        OperationCallback operationCallback = cohortFutures.isEmpty() ? OperationCallback.NO_OP_CALLBACK :
+                new TransactionRateLimitingCallback(actorContext);
 
         return voidOperation("commit", new CommitTransaction(transactionId).toSerializable(),
                 CommitTransactionReply.SERIALIZABLE_CLASS, true, operationCallback);
@@ -262,8 +218,6 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
         if(cohorts != null) {
             finishVoidOperation(operationName, message, expectedResponseClass, propagateException,
                     returnFuture, callback);
-            if (operationName.equals("commit"))
-                LOG.info("[3PCCP]commit_message_sent_to cohorts {}", System.nanoTime());
         } else {
             buildCohortList().onComplete(new OnComplete<Void>() {
                 @Override
@@ -296,9 +250,9 @@ public class ThreePhaseCommitCohortProxy extends AbstractThreePhaseCommitCohort<
             LOG.debug("Tx {} finish {}", transactionId, operationName);
         }
 
-        callback.resume();
+        callback.run();
 
-        Future<Iterable<Object>> combinedFuture = invokeCohorts(message, operationName);
+        Future<Iterable<Object>> combinedFuture = invokeCohorts(message);
 
         combinedFuture.onComplete(new OnComplete<Iterable<Object>>() {
             @Override
