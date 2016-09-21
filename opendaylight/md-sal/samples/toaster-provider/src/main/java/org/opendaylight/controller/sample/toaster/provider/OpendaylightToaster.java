@@ -194,17 +194,15 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
         // final long startTime = System.nanoTime();
         long trans = 0;
 
-        /* if (input.getMethod() == 3) {
+        if (input.getMethod() == 4) {
             final ReadWriteTransaction tx = dataProvider.newReadWriteTransaction();
-            final InstanceIdentifier<DsTestSpace> idspace = TOASTER_IID.builder()
-                    .child(DsTestSpace.class).build();
-            tx.delete(LogicalDatastoreType.OPERATIONAL, idspace);
-            final InstanceIdentifier<DsTestSpace2> idspace2 = TOASTER2_IID.builder()
-                    .child(DsTestSpace2.class).build();
-            tx.delete(LogicalDatastoreType.OPERATIONAL, idspace2);
+
+            tx.delete(LogicalDatastoreType.OPERATIONAL, TOASTER_IID.builder().build());
+            tx.delete(LogicalDatastoreType.OPERATIONAL, TOASTER2_IID.builder().build());
+
             tx.submit();
             return Futures.immediateFuture(RpcResultBuilder.<Void> success().build() );
-        } */
+        }
 
         final long timesOfCommits = input.getCommits();
         for (trans=0; trans<timesOfCommits; trans++) {

@@ -186,7 +186,7 @@
         input {
             leaf method {
                 type uint32 {
-                    range "1..3";
+                    range "1..10";
                 }
                 default 1;
                 description
