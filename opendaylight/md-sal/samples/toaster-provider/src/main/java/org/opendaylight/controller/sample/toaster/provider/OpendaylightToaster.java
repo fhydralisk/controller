@@ -186,6 +186,54 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
         return Futures.immediateFuture( RpcResultBuilder.<Void> success().build() );
     }
 
+
+    private void testCommit(final long key, final long value, final Boolean shard1, final Boolean shard2) {
+        final ReadWriteTransaction tx = dataProvider.newReadWriteTransaction();
+        //LOG.info("Transaction starts - {} - {}", tx.toString(), System.nanoTime() );
+        if (shard1) {
+            final InstanceIdentifier<DsTestSpace> idspace = TOASTER_IID.builder()
+                         .child(DsTestSpace.class, new DsTestSpaceKey(key)).build();
+            final DsTestSpace testSpace = new DsTestSpaceBuilder().setStoreData(value).build();
+
+            tx.put( LogicalDatastoreType.OPERATIONAL, idspace, testSpace, true );
+        }
+
+        if (shard2) {
+            final InstanceIdentifier<DsTestSpace2> idspace2 = TOASTER2_IID.builder()
+                    .child(DsTestSpace2.class, new DsTestSpace2Key(key)).build();
+            final DsTestSpace2 testSpace2 = new DsTestSpace2Builder().setStoreData2(value).build();
+
+            tx.put( LogicalDatastoreType.OPERATIONAL, idspace2, testSpace2, true );
+        }
+        /*tx.put( LogicalDatastoreType.OPERATIONAL, TOASTER2_IID,
+                buildToaster2( Toaster2.ToasterStatus.Down ) );*/
+        final ListenableFuture<Void> submitFuture = tx.submit();
+        Futures.addCallback(submitFuture, new FutureCallback<Void>() {
+
+            @Override
+            public void onSuccess(Void result) {
+                LOG.info("Transaction submit succeed - {} - {}", tx.toString(), System.nanoTime() );
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+                // TODO Auto-generated method stub
+                LOG.info("Transaction submit failed - {} - {}", tx.toString(), System.nanoTime() );
+            }
+
+        });
+
+    }
+
+    private void testRemove(final Boolean shard1, final Boolean shard2) {
+        final ReadWriteTransaction tx = dataProvider.newReadWriteTransaction();
+
+        tx.delete(LogicalDatastoreType.OPERATIONAL, TOASTER_IID.builder().build());
+        tx.delete(LogicalDatastoreType.OPERATIONAL, TOASTER2_IID.builder().build());
+
+        tx.submit();
+    }
+
     /**
      *
      */
@@ -195,81 +243,33 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
         long trans = 0;
 
         if (input.getMethod() == 4) {
-            final ReadWriteTransaction tx = dataProvider.newReadWriteTransaction();
-
-            tx.delete(LogicalDatastoreType.OPERATIONAL, TOASTER_IID.builder().build());
-            tx.delete(LogicalDatastoreType.OPERATIONAL, TOASTER2_IID.builder().build());
-
-            tx.submit();
-            return Futures.immediateFuture(RpcResultBuilder.<Void> success().build() );
+            testRemove(true, true);
+            return Futures.immediateFuture(RpcResultBuilder.<Void> success().build());
         }
 
         final long timesOfCommits = input.getCommits();
         for (trans=0; trans<timesOfCommits; trans++) {
-            final long transf = trans;
-            final ReadWriteTransaction tx = dataProvider.newReadWriteTransaction();
-            //LOG.info("Transaction starts - {} - {}", tx.toString(), System.nanoTime() );
-
-            final InstanceIdentifier<DsTestSpace> idspace = TOASTER_IID.builder()
-                         .child(DsTestSpace.class, new DsTestSpaceKey(transf)).build();
-            final DsTestSpace testSpace = new DsTestSpaceBuilder().setStoreData(transf).build();
-
-            tx.put( LogicalDatastoreType.OPERATIONAL, idspace, testSpace, true );
-
-            if (input.getMethod() == 3) {
-                final InstanceIdentifier<DsTestSpace2> idspace2 = TOASTER2_IID.builder()
-                        .child(DsTestSpace2.class, new DsTestSpace2Key(transf)).build();
-                final DsTestSpace2 testSpace2 = new DsTestSpace2Builder().setStoreData2(transf).build();
-
-                tx.put( LogicalDatastoreType.OPERATIONAL, idspace2, testSpace2, true );
+            switch (input.getMethod().intValue()) {
+            case 1:
+                testCommit(trans, trans, true, false);
+                break;
+            case 2:
+                testCommit(trans, trans, true, false);
+                testCommit(trans, trans, false, true);
+                break;
+            case 3:
+                testCommit(trans, trans, true, true);
+                break;
+            case 5:
+                testCommit(0, 0, true, true);
+                break;
+            case 6:
+                testCommit(0, trans, true, true);
+                break;
+            default:
+                break;
             }
-            /*tx.put( LogicalDatastoreType.OPERATIONAL, TOASTER2_IID,
-                    buildToaster2( Toaster2.ToasterStatus.Down ) );*/
-            final ListenableFuture<Void> submitFuture = tx.submit();
-            Futures.addCallback(submitFuture, new FutureCallback<Void>() {
 
-                @Override
-                public void onSuccess(Void result) {
-                    LOG.info("Transaction submit succeed - {} - {}", tx.toString(), System.nanoTime() );
-                }
-
-                @Override
-                public void onFailure(Throwable t) {
-                    // TODO Auto-generated method stub
-                    LOG.info("Transaction submit failed - {} - {}", tx.toString(), System.nanoTime() );
-                }
-
-            });
-
-            if (input.getMethod() == 2) {
-                final ReadWriteTransaction tx2 = dataProvider.newReadWriteTransaction();
-                // LOG.info("Transaction2 starts - {} - {}", tx2.toString(), System.nanoTime() );
-
-                final InstanceIdentifier<DsTestSpace2> idspace2 = TOASTER2_IID.builder()
-                             .child(DsTestSpace2.class, new DsTestSpace2Key(transf)).build();
-                final DsTestSpace2 testSpace2 = new DsTestSpace2Builder().setStoreData2(transf).build();
-
-                tx2.put( LogicalDatastoreType.OPERATIONAL, idspace2, testSpace2, true );
-                /*tx.put( LogicalDatastoreType.OPERATIONAL, TOASTER2_IID,
-                        buildToaster2( Toaster2.ToasterStatus.Down ) );*/
-                final ListenableFuture<Void> submitFuture2 = tx2.submit();
-                Futures.addCallback(submitFuture2, new FutureCallback<Void>() {
-
-                    @Override
-                    public void onSuccess(Void result) {
-                        // TODO Auto-generated method stub
-                        LOG.info("Transaction2 submit succeed - {} - {}", tx.toString(), System.nanoTime() );
-                    }
-
-                    @Override
-                    public void onFailure(Throwable t) {
-                        // TODO Auto-generated method stub
-                        LOG.info("Transaction2 submit failed - {} - {}", tx2.toString(), System.nanoTime() );
-                    }
-
-                });
-
-            }
             try {
                 Thread.sleep(input.getTestTime());
             } catch (InterruptedException e) {
