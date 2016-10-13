@@ -266,6 +266,9 @@ public class OpendaylightToaster implements ToasterService, ToasterProviderRunti
             case 6:
                 testCommit(0, trans, true, true);
                 break;
+            case 7:
+                testCommit(trans, trans, false, true);
+                break;
             default:
                 break;
             }
